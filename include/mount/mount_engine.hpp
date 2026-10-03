@@ -13,6 +13,7 @@ enum class GameVersion : uint32_t {
     LegendsArceus,
     Scarlet,
     Violet,
+    LegendsZA,
     Unknown
 };
 struct GameTitleInfo {
@@ -20,7 +21,7 @@ struct GameTitleInfo {
     uint64_t titleId;
     const char* name;
     const char* mountPoint;     
-    const char* saveRelativePath
+    const char* saveRelativePath;
 };
 inline constexpr GameTitleInfo SUPPORTED_GAMES[] = {
     { GameVersion::Sword,            0x0100ABF008968000ULL, "Pokémon Sword",            "save_sw",  "main" },

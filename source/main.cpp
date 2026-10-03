@@ -10,8 +10,8 @@
 struct ProfileData {
     AccountUid uid;
     std::string nickname;
-    std::unordered_map<SwitchDex::GameVersion, std::unordered_set<uint16_t>> perGameCaught;
-    std::unordered_set<uint16_t> aggregatedCaughtSpecies;
+    std::unordered_map<SwitchDex::GameVersion, std::unordered_map<uint16_t, SwitchDex::CaughtPokemonData>> perGameCaught;
+    std::unordered_map<uint16_t, SwitchDex::CaughtPokemonData> aggregatedCaughtSpecies;
 };
 void populateProfiles(std::vector<ProfileData>& profiles, SwitchDex::MountEngine& mountEngine, SwitchDex::SaveParser& saveParser) {
     auto users = mountEngine.listAvailableUsers();
@@ -25,8 +25,10 @@ void populateProfiles(std::vector<ProfileData>& profiles, SwitchDex::MountEngine
             if (!saveMount.isMounted()) continue;
             std::string fullSavePath = saveMount.getFullPath(game.saveRelativePath);
             auto speciesFound = saveParser.parseCaughtSpecies(fullSavePath, game.version);
-            pd.perGameCaught[game.version].insert(speciesFound.begin(), speciesFound.end());
-            pd.aggregatedCaughtSpecies.insert(speciesFound.begin(), speciesFound.end());
+            for (const auto& kv : speciesFound) {
+                pd.perGameCaught[game.version][kv.first] = kv.second;
+                pd.aggregatedCaughtSpecies[kv.first] = kv.second;
+            }
         }
         profiles.push_back(pd);
     }
@@ -83,7 +85,8 @@ int main(int argc, char* argv[]) {
         }
         HidTouchScreenState touchState = {0};
         hidGetTouchScreenStates(&touchState, 1);
-        pokedexUI.handleInput(kDown, [&](SwitchDex::DexGame game, SwitchDex::CatchFilterMode filterMode, const std::string& typeFilter) {
+        uint64_t kHeld = padGetButtons(&pad);
+        pokedexUI.handleInput(kDown, kHeld, [&](SwitchDex::DexGame game, SwitchDex::CatchFilterMode filterMode, const std::string& typeFilter) {
             updatePokedexList(game, filterMode, typeFilter);
         });
         pokedexUI.handleTouch(touchState, [&](SwitchDex::DexGame game, SwitchDex::CatchFilterMode filterMode, const std::string& typeFilter) {

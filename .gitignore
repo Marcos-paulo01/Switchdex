@@ -18,3 +18,10 @@ build/
 
 # Temporários
 scratch*/
+node_modules/
+Homebrew
+.gemini/
+
+# Scripts
+download_sprites.js
+generate_db.js

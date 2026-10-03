@@ -124,9 +124,10 @@ SDL_Texture* PokedexUI::loadTexture(const std::string& path) {
 }
 void PokedexUI::handleInput(
     uint64_t keysDown,
+    uint64_t keysHeld,
     std::function<void(DexGame, CatchFilterMode, const std::string&)> onFilterChanged
 ) {
-    if ((keysDown & HidNpadButton_L) && (keysDown & HidNpadButton_R) && (keysDown & HidNpadButton_Plus)) {
+    if ((keysHeld & HidNpadButton_L) && (keysHeld & HidNpadButton_R) && (keysDown & HidNpadButton_Plus)) {
         for (auto& entry : m_entries) {
             entry.isUnlocked = true;
         }
@@ -162,6 +163,13 @@ void PokedexUI::handleInput(
                 onFilterChanged(m_selectedGame, m_catchFilter, m_currentTypeFilter);
             }
         }
+    } else if (m_currentView == AppView::PokemonDetail) {
+        if (keysDown & HidNpadButton_B) {
+            m_targetView = AppView::GamePokedex;
+            m_isAnimating = true;
+            m_animFrame = 0;
+            return;
+        }
     } else {
         if (keysDown & HidNpadButton_B) {
             m_targetView = AppView::HomeHub;
@@ -185,12 +193,14 @@ void PokedexUI::handleInput(
             int totalGames = static_cast<int>(m_gameCards.size());
             m_selectedGameIndex = (m_selectedGameIndex == 0) ? (totalGames - 1) : (m_selectedGameIndex - 1);
             m_selectedGame = m_gameCards[m_selectedGameIndex].gameId;
+            m_isAnimating = true; m_animFrame = 0; m_targetView = AppView::GamePokedex;
             if (onFilterChanged) onFilterChanged(m_selectedGame, m_catchFilter, m_currentTypeFilter);
             return;
         } else if (keysDown & HidNpadButton_ZR) {
             int totalGames = static_cast<int>(m_gameCards.size());
             m_selectedGameIndex = (m_selectedGameIndex + 1) % totalGames;
             m_selectedGame = m_gameCards[m_selectedGameIndex].gameId;
+            m_isAnimating = true; m_animFrame = 0; m_targetView = AppView::GamePokedex;
             if (onFilterChanged) onFilterChanged(m_selectedGame, m_catchFilter, m_currentTypeFilter);
             return;
         }
@@ -208,6 +218,11 @@ void PokedexUI::handleInput(
             m_selectedIndex = std::max(0, m_selectedIndex - PAGE_SIZE);
         } else if (keysDown & HidNpadButton_R) {
             m_selectedIndex = std::min(total - 1, m_selectedIndex + PAGE_SIZE);
+        } else if (keysDown & HidNpadButton_A) {
+            m_targetView = AppView::PokemonDetail;
+            m_isAnimating = true;
+            m_animFrame = 0;
+            return;
         }
         int selectedRow = m_selectedIndex / GRID_COLS;
         int visibleStartRow = m_scrollOffset / GRID_COLS;
@@ -313,6 +328,19 @@ void PokedexUI::drawText(const std::string& text, int x, int y, SDL_Color color,
     }
     SDL_FreeSurface(surf);
 }
+
+void PokedexUI::drawTextWrapped(const std::string& text, int x, int y, Uint32 wrapLength, SDL_Color color, TTF_Font* font) {
+    if (!font || text.empty()) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended_Wrapped(font, text.c_str(), color, wrapLength);
+    if (!surf) return;
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(m_renderer, surf);
+    if (tex) {
+        SDL_Rect dst = { x, y, surf->w, surf->h };
+        SDL_RenderCopy(m_renderer, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    }
+    SDL_FreeSurface(surf);
+}
 void PokedexUI::drawProgressBar(int x, int y, int width, int height, int value, int maxValue, SDL_Color color) {
     SDL_SetRenderDrawColor(m_renderer, 35, 42, 54, 255);
     SDL_Rect bgRect = { x, y, width, height };
@@ -337,7 +365,7 @@ void PokedexUI::renderTitleScreen() {
     SDL_SetRenderDrawColor(m_renderer, white.r, white.g, white.b, 255);
     SDL_Rect innerCircle = { SCREEN_WIDTH / 2 - innerSize / 2, SCREEN_HEIGHT / 2 - innerSize / 2 - 50, innerSize, innerSize };
     SDL_RenderFillRect(m_renderer, &innerCircle);
-    drawText("Rotom OS v2.0", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, white, m_fontHuge, true);
+    drawText("Switchdex", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, white, m_fontHuge, true);
     static int blinkTimer = 0;
     blinkTimer = (blinkTimer + 1) % 60;
     if (blinkTimer < 30) {
@@ -361,7 +389,7 @@ void PokedexUI::renderHomeHub() {
     SDL_SetRenderDrawColor(m_renderer, darkRed.r, darkRed.g, darkRed.b, 255);
     SDL_Rect headerShadow = { 0, 120, SCREEN_WIDTH, 4 };
     SDL_RenderFillRect(m_renderer, &headerShadow);
-    drawText("Rotom OS v2.0", 60, 45, white, m_fontHuge);
+    drawText("Switchdex", 60, 45, white, m_fontHuge);
     drawText(t("Select a Game Pokédex Module"), 60, 85, lightGray, m_fontMedium);
     SDL_SetRenderDrawColor(m_renderer, darkRed.r, darkRed.g, darkRed.b, 255);
     SDL_Rect profileRect = { SCREEN_WIDTH - 280, 30, 240, 50 };
@@ -444,7 +472,8 @@ void PokedexUI::renderFilterHeader() {
     std::string gameTitle = (m_selectedGame == DexGame::National) ? t("National Pokédex") :
                             (m_selectedGame == DexGame::SwordShield) ? "Sword & Shield" :
                             (m_selectedGame == DexGame::ScarletViolet) ? "Scarlet & Violet" :
-                            (m_selectedGame == DexGame::LegendsArceus) ? "Legends: Arceus" : "BD & SP";
+                            (m_selectedGame == DexGame::LegendsArceus) ? "Legends: Arceus" :
+                            (m_selectedGame == DexGame::LegendsZA) ? "Legends: Z-A" : "BD & SP";
     drawText(gameTitle, 40, 25, white, m_fontLarge);
     std::string catchFilterStr = (m_catchFilter == CatchFilterMode::All) ? t("ALL") :
                                  (m_catchFilter == CatchFilterMode::CaughtOnly) ? t("CAUGHT ONLY") : t("UNCAUGHT ONLY");
@@ -567,10 +596,7 @@ void PokedexUI::renderDetailPanel() {
         drawText(t("Region: ") + current.region, panelX + 28, panelY + 188, cyan, m_fontMedium);
         drawText(t("Type: ") + typeStr, panelX + 28, panelY + 215, gray, m_fontMedium);
         drawText(t("Pokédex Entry:"), panelX + 28, panelY + 252, white, m_fontMedium);
-        drawText(current.description.substr(0, 46), panelX + 28, panelY + 280, gray, m_fontSmall);
-        if (current.description.length() > 46) {
-            drawText(current.description.substr(46, 46), panelX + 28, panelY + 300, gray, m_fontSmall);
-        }
+        drawTextWrapped(current.description, panelX + 28, panelY + 280, 380, gray, m_fontSmall);
         int statsY = panelY + 340;
         drawText(t("BASE STATS"), panelX + 28, statsY, white, m_fontMedium);
         auto renderStatLine = [&](const char* label, int val, int yOffset, SDL_Color color) {
@@ -605,7 +631,7 @@ void PokedexUI::renderGamePokedex() {
 void PokedexUI::render() {
     if (m_isAnimating) {
         m_animFrame++;
-        if (m_animFrame == 30) {
+        if (m_animFrame == 10) {
             m_currentView = m_targetView;
         }
     }
@@ -613,6 +639,8 @@ void PokedexUI::render() {
         SDL_SetRenderDrawColor(m_renderer, 227, 53, 13, 255);
     } else if (m_currentView == AppView::HomeHub) {
         SDL_SetRenderDrawColor(m_renderer, 240, 240, 245, 255);
+    } else if (m_currentView == AppView::PokemonDetail) {
+        SDL_SetRenderDrawColor(m_renderer, 25, 28, 35, 255);
     } else {
         SDL_SetRenderDrawColor(m_renderer, 15, 17, 23, 255);
     }
@@ -621,46 +649,91 @@ void PokedexUI::render() {
         renderTitleScreen();
     } else if (m_currentView == AppView::HomeHub) {
         renderHomeHub();
+    } else if (m_currentView == AppView::PokemonDetail) {
+        renderPokemonDetail();
     } else {
         renderGamePokedex();
     }
     if (m_isAnimating) {
-        int maxFrames = 60;
+        int maxFrames = 20;
         float progress = 0.0f;
-        if (m_animFrame <= 30) {
-            progress = (float)m_animFrame / 30.0f;
+        if (m_animFrame <= 10) {
+            progress = (float)m_animFrame / 10.0f;
         } else {
-            progress = 1.0f - ((float)(m_animFrame - 30) / 30.0f);
+            progress = 1.0f - ((float)(m_animFrame - 10) / 10.0f);
         }
-        progress = 1.0f - (1.0f - progress) * (1.0f - progress);
-        int doorWidth = (int)((SCREEN_WIDTH / 2) * progress);
-        SDL_Color pokedexRed = { 227, 53, 13, 255 };
-        SDL_SetRenderDrawColor(m_renderer, pokedexRed.r, pokedexRed.g, pokedexRed.b, 255);
-        SDL_Rect leftDoor = { 0, 0, doorWidth, SCREEN_HEIGHT };
-        SDL_RenderFillRect(m_renderer, &leftDoor);
-        SDL_Rect rightDoor = { SCREEN_WIDTH - doorWidth, 0, doorWidth, SCREEN_HEIGHT };
-        SDL_RenderFillRect(m_renderer, &rightDoor);
-        if (progress > 0.01f) {
-            SDL_SetRenderDrawColor(m_renderer, 30, 30, 35, 255);
-            SDL_Rect centerLine = { doorWidth - 2, 0, 4, SCREEN_HEIGHT };
-            SDL_RenderFillRect(m_renderer, &centerLine);
-            SDL_Rect rightCenterLine = { SCREEN_WIDTH - doorWidth - 2, 0, 4, SCREEN_HEIGHT };
-            SDL_RenderFillRect(m_renderer, &rightCenterLine);
-            if (progress > 0.8f) {
-                int circleSize = 100 * progress;
-                SDL_SetRenderDrawColor(m_renderer, 30, 30, 35, 255);
-                SDL_Rect outerCircle = { SCREEN_WIDTH/2 - circleSize/2, SCREEN_HEIGHT/2 - circleSize/2, circleSize, circleSize };
-                SDL_RenderFillRect(m_renderer, &outerCircle);
-                int innerSize = 60 * progress;
-                SDL_SetRenderDrawColor(m_renderer, 255, 255, 255, 255);
-                SDL_Rect innerCircle = { SCREEN_WIDTH/2 - innerSize/2, SCREEN_HEIGHT/2 - innerSize/2, innerSize, innerSize };
-                SDL_RenderFillRect(m_renderer, &innerCircle);
-            }
-        }
+        
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
+        int alpha = (int)(255.0f * progress);
+        if (alpha > 255) alpha = 255;
+        if (alpha < 0) alpha = 0;
+        
+        SDL_SetRenderDrawColor(m_renderer, 10, 12, 18, alpha);
+        SDL_Rect fullScreen = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+        SDL_RenderFillRect(m_renderer, &fullScreen);
+        SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_NONE);
+        
         if (m_animFrame >= maxFrames) {
             m_isAnimating = false;
         }
     }
     SDL_RenderPresent(m_renderer);
 }
+
+void PokedexUI::renderPokemonDetail() {
+    SDL_Color white = { 255, 255, 255, 255 };
+    SDL_Color gray = { 150, 150, 160, 255 };
+    SDL_Color typeColor = { 100, 100, 255, 255 };
+    
+    SDL_SetRenderDrawColor(m_renderer, 25, 28, 35, 255);
+    SDL_RenderClear(m_renderer);
+    
+    if (m_entries.empty() || m_selectedIndex < 0 || m_selectedIndex >= static_cast<int>(m_entries.size())) return;
+    const auto& entry = m_entries[m_selectedIndex];
+    
+    drawText("#" + std::to_string(entry.speciesId) + " " + entry.name, 50, 30, white, m_fontHuge);
+    drawText("[B] " + t("Back"), SCREEN_WIDTH - 150, 40, gray, m_fontMedium);
+    
+    SDL_Texture* tex = loadTexture(entry.spritePath);
+    if (tex) {
+        SDL_Rect srcRect = { 0, 0, 120, 120 };
+        SDL_Rect dstRect = { 100, 150, 360, 360 };
+        SDL_RenderCopy(m_renderer, tex, &srcRect, &dstRect);
+    }
+    
+    int infoX = 500;
+    int infoY = 150;
+    
+    drawText("Type: " + entry.type1 + (entry.type2.empty() ? "" : " / " + entry.type2), infoX, infoY, white, m_fontLarge);
+    drawText("Region: " + entry.region, infoX, infoY + 50, gray, m_fontMedium);
+    drawTextWrapped(entry.description, infoX, infoY + 90, 700, gray, m_fontMedium);
+    
+    int statsY = infoY + 200;
+    drawText("Abilities:", infoX, statsY, white, m_fontMedium);
+    std::string abStr = entry.ability1;
+    if (!entry.ability2.empty()) abStr += " / " + entry.ability2;
+    if (!entry.hiddenAbility.empty()) abStr += " (Hidden: " + entry.hiddenAbility + ")";
+    drawText(abStr, infoX + 20, statsY + 30, gray, m_fontSmall);
+    if (entry.evolveLevel > 0) {
+        drawText("Evolves at level: " + std::to_string(entry.evolveLevel), infoX + 20, statsY + 60, gray, m_fontSmall);
+    }
+    
+    int saveY = statsY + 110;
+    drawText("Save File Details:", infoX, saveY, white, m_fontMedium);
+    
+    if (entry.isUnlocked && entry.saveExp > 0) {
+        drawText("EXP: " + std::to_string(entry.saveExp) + " (Growth: " + entry.growthRate + ")", infoX + 20, saveY + 30, typeColor, m_fontSmall);
+        std::string activeAb = "Unknown";
+        if (entry.saveAbilityIndex == 0) activeAb = entry.ability1;
+        else if (entry.saveAbilityIndex == 1) activeAb = (!entry.ability2.empty() ? entry.ability2 : entry.ability1);
+        else if (entry.saveAbilityIndex == 2) activeAb = entry.hiddenAbility;
+        drawText("Active Ability: " + activeAb, infoX + 20, saveY + 60, typeColor, m_fontSmall);
+    } else if (entry.isUnlocked) {
+        drawText("Caught, but detailed data not available in this save.", infoX + 20, saveY + 30, gray, m_fontSmall);
+    } else {
+        drawText("Not Caught in this save.", infoX + 20, saveY + 30, gray, m_fontSmall);
+    }
 }
+
+}
+

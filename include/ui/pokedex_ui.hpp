@@ -11,7 +11,8 @@ namespace SwitchDex {
 enum class AppView : int {
     TitleScreen,   
     HomeHub,       
-    GamePokedex    
+    GamePokedex,
+    PokemonDetail
 };
 enum class AppLanguage : int {
     English,
@@ -29,6 +30,7 @@ public:
     void toggleLanguage();
     void handleInput(
         uint64_t keysDown,
+        uint64_t keysHeld,
         std::function<void(DexGame, CatchFilterMode, const std::string&)> onFilterChanged
     );
     void handleTouch(
@@ -48,8 +50,10 @@ private:
     void renderFilterHeader();
     void renderGrid();
     void renderDetailPanel();
+    void renderPokemonDetail();
     void renderFooterHints();
     void drawText(const std::string& text, int x, int y, SDL_Color color, TTF_Font* font, bool center = false);
+    void drawTextWrapped(const std::string& text, int x, int y, Uint32 wrapLength, SDL_Color color, TTF_Font* font);
     void drawProgressBar(int x, int y, int width, int height, int value, int maxValue, SDL_Color color);
     SDL_Texture* loadTexture(const std::string& path);
     SDL_Window* m_window = nullptr;

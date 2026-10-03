@@ -6,6 +6,7 @@
 #include <optional>
 #include <cstdint>
 #include "mount/mount_engine.hpp"
+#include "parser/save_parser.hpp"
 #include "db/sqlite3.h"
 namespace SwitchDex {
 enum class DexGame : int {
@@ -14,7 +15,8 @@ enum class DexGame : int {
     ScarletViolet = 2,
     LegendsArceus = 3,
     BrilliantDiamondShiningPearl = 4,
-    Count = 5
+    LegendsZA = 5,
+    Count = 6
 };
 struct GameCardInfo {
     DexGame gameId;
@@ -49,6 +51,13 @@ struct PokemonEntry {
     int spAttack;
     int spDefense;
     int speed;
+    std::string growthRate;
+    std::string ability1;
+    std::string ability2;
+    std::string hiddenAbility;
+    int evolveLevel = -1;
+    uint32_t saveExp = 0;
+    uint16_t saveAbilityIndex = 0;
     bool isUnlocked = false;
 };
 class PokedexDB {
@@ -58,15 +67,15 @@ public:
     bool open(const std::string& dbPath);
     void close();
     std::vector<GameCardInfo> getGameCardsInfo(
-        const std::unordered_map<GameVersion, std::unordered_set<uint16_t>>& perGameCaught,
-        const std::unordered_set<uint16_t>& allCaught
+        const std::unordered_map<GameVersion, std::unordered_map<uint16_t, CaughtPokemonData>>& perGameCaught,
+        const std::unordered_map<uint16_t, CaughtPokemonData>& allCaught
     );
     std::vector<PokemonEntry> loadFilteredPokemon(
         DexGame game,
         CatchFilterMode filterMode,
         const std::string& typeFilter,
-        const std::unordered_map<GameVersion, std::unordered_set<uint16_t>>& perGameCaught,
-        const std::unordered_set<uint16_t>& allCaught
+        const std::unordered_map<GameVersion, std::unordered_map<uint16_t, CaughtPokemonData>>& perGameCaught,
+        const std::unordered_map<uint16_t, CaughtPokemonData>& allCaught
     );
     bool createTablesIfNotExist();
     bool seedSampleData();
