@@ -25,3 +25,7 @@ Homebrew
 # Scripts
 download_sprites.js
 generate_db.js
+
+# Sprites
+romfs/sprites/
+!romfs/sprites/pokeball.png
