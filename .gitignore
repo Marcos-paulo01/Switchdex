@@ -1,0 +1,20 @@
+# DevkitPro / Build Artifacts
+build/
+*.nro
+*.elf
+*.map
+*.nacp
+
+# OS / Editor Files
+.DS_Store
+.vscode/
+.vs/
+*.swp
+*.swo
+
+# Database and Generated Files
+*.db
+*.sqlite
+
+# Temporários
+scratch*/
